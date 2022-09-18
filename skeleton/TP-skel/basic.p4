@@ -2,6 +2,9 @@
 #include <core.p4>
 #include <v1model.p4>
 
+#define INT_TAM_FILHO 32
+#define MAX_FILHOS 80
+
 const bit<16> TYPE_IPV4 = 0x800;
 
 /*************************************************************************
@@ -33,13 +36,48 @@ header ipv4_t {
     ip4Addr_t dstAddr;
 }
 
+header int_pai_t {
+    bit<32> Tam_Filho;
+    bit<32> Qtd_Filhos;
+}
+
+header int_filho_t{
+    bit<32> ID_Switch;
+    bit<9> Porta_Entrada;
+    bit<9> Porta_Saida;
+    bit<48> Timestamp;
+// Outros dados
+    bit<6> padding;
+}
+
+//From load_balance example in class
+header tcp_t {
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<32> seqNo;
+    bit<32> ackNo;
+    bit<4>  dataOffset;
+    bit<3>  res;
+    bit<3>  ecn;
+    bit<6>  ctrl;
+    bit<16> window;
+    bit<16> checksum;
+    bit<16> urgentPtr;
+}
+
 struct metadata {
-    /* empty */
+    bit<32> remaining;
+    bit<1> isEndhost;
 }
 
 struct headers {
-    ethernet_t   ethernet;
-    ipv4_t       ipv4;
+    ethernet_t              ethernet;
+    ipv4_t                  ipv4;
+    // From load_balance example
+    tcp_t                   tcp;
+    //Aditional data
+    int_pai_t               int_pai;
+    int_filho_t[MAX_FILHOS]  int_filhos;
 }
 
 /*************************************************************************
@@ -68,6 +106,11 @@ parser MyParser(packet_in packet,
         transition accept;
     }
 
+    state parse_tcp {
+        packet.extract(hdr.tcp);
+        transition accept;
+    }
+
 }
 
 /*************************************************************************
@@ -86,6 +129,9 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
+
+    register<bit<32>>(1) swid;
+    
     action drop() {
         mark_to_drop();
     }
@@ -95,6 +141,33 @@ control MyIngress(inout headers hdr,
         hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
         hdr.ethernet.dstAddr = dstAddr;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
+    }
+
+    action add_int_pai(){
+
+        hdr.int_pai.Tam_Filho = INT_TAM_FILHO;
+        hdr.int_pai.Qtd_Filhos = 0;
+        hdr.int_pai.setValid();
+    }
+
+    action add_int_filho(){
+        bit<32> var_swid;
+        swid.read(var_swid, 0);
+
+        bit<32> index_filhos;
+        index_filhos = hdr.int_pai.Qtd_Filhos;
+
+        // Adicionando dados do filhos
+        hdr.int_filhos[index_filhos].ID_Switch = var_swid;
+        hdr.int_filhos[index_filhos].Porta_Entrada = standard_metadata.ingress_port;
+        hdr.int_filhos[index_filhos].Porta_Saida = standard_metadata.egress_spec;
+        hdr.int_filhos[index_filhos].Timestamp = standard_metadata.ingress_global_timestamp;
+        hdr.int_filhos[index_filhos].padding = 0;
+
+        hdr.int_filhos[index_filhos].setValid();
+
+        //Contabiliza filho
+        hdr.int_pai.Qtd_Filhos = index_filhos + 1;
     }
     
     table ipv4_lpm {
@@ -114,6 +187,12 @@ control MyIngress(inout headers hdr,
         if (hdr.ipv4.isValid()) {
             ipv4_lpm.apply();
         }
+
+        if(!hdr.int_pai.isValid()){
+            add_int_pai();
+        }
+
+        add_int_filho();
     }
 }
 
@@ -159,6 +238,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
+        packet.emit(hdr.tcp);
     }
 }
 
