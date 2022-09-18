@@ -2,7 +2,7 @@
 #include <core.p4>
 #include <v1model.p4>
 
-#define INT_TAM_FILHO 32
+#define INT_TAM_FILHO 104 // Soma dos bits do int_filho (que deve ser múltiplo de 8)
 #define MAX_FILHOS 80
 
 const bit<16> TYPE_IPV4 = 0x800;
@@ -66,8 +66,6 @@ header tcp_t {
 }
 
 struct metadata {
-    bit<32> remaining;
-    bit<1> isEndhost;
 }
 
 struct headers {

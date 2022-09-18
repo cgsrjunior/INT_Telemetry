@@ -3,11 +3,11 @@ import sys
 import struct
 import os
 
-from scapy.all import sniff, sendp, hexdump, get_if_list, get_if_hwaddr
-from scapy.all import Packet, IPOption
-from scapy.all import ShortField, IntField, LongField, BitField, FieldListField, FieldLenField
-from scapy.all import IP, TCP, UDP, Raw
-from scapy.layers.inet import _IPOption_HDR
+from scapy.all import sniff, get_if_list# , sendp, hexdump, get_if_hwaddr
+from scapy.all import Packet# , IPOption
+from scapy.all import PacketListField, IntField, BitField #, ShortField, LongField, FieldListField, FieldLenField
+from scapy.all import TCP, IP#, UDP, Raw
+# from scapy.layers.inet import _IPOption_HDR
 
 def get_if():
     ifs=get_if_list()
@@ -21,6 +21,7 @@ def get_if():
         exit(1)
     return iface
 
+"""
 class IPOption_MRI(IPOption):
     name = "MRI"
     option = 31
@@ -33,21 +34,42 @@ class IPOption_MRI(IPOption):
                                    [],
                                    IntField("", 0),
                                    length_from=lambda pkt:pkt.count*4) ]
+"""
+
+class IntFilho(Packet):
+    name = "int_filho"
+    fields_desc = [ 
+        IntField("ID_Switch", 0),
+        BitField("Porta_Entrada", 0, 9),
+        BitField("Porta_Saida", 0, 9),
+        BitField("Timestamp", 0, 48),
+        BitField("Padding", 0, 6)
+    ]
+
+class IntPai(Packet):
+    name = "int_pai"
+    fields_desc = [ 
+        IntField("Tam_Filho", 0),
+        IntField("Qtd_Filhos", 0),
+        PacketListField("int_filhos", None, IntFilho, length_from = lambda pkt : pkt.Qtd_Filhos*pkt.Tam_Filho)
+    ]
+
 def handle_pkt(pkt):
     if TCP in pkt and pkt[TCP].dport == 1234:
         print "got a packet"
         pkt.show2()
     #    hexdump(pkt)
         sys.stdout.flush()
+    if IntPai in pkt:
+        pkt.show2()
 
 
-def main():
+if __name__ == '__main__':
     ifaces = filter(lambda i: 'eth' in i, os.listdir('/sys/class/net/'))
     iface = ifaces[0]
     print "sniffing on %s" % iface
     sys.stdout.flush()
     sniff(iface = iface,
           prn = lambda x: handle_pkt(x))
+    # bind_layers(IP, IntPai, proto=??)
 
-if __name__ == '__main__':
-    main()
