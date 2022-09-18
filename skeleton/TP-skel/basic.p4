@@ -154,20 +154,19 @@ control MyIngress(inout headers hdr,
         bit<32> var_swid;
         swid.read(var_swid, 0);
 
-        bit<32> index_filhos;
-        index_filhos = hdr.int_pai.Qtd_Filhos;
+        hdr.int_filhos.push_front(1);
 
         // Adicionando dados do filhos
-        hdr.int_filhos[index_filhos].ID_Switch = var_swid;
-        hdr.int_filhos[index_filhos].Porta_Entrada = standard_metadata.ingress_port;
-        hdr.int_filhos[index_filhos].Porta_Saida = standard_metadata.egress_spec;
-        hdr.int_filhos[index_filhos].Timestamp = standard_metadata.ingress_global_timestamp;
-        hdr.int_filhos[index_filhos].padding = 0;
+        hdr.int_filhos[0].ID_Switch = var_swid;
+        hdr.int_filhos[0].Porta_Entrada = standard_metadata.ingress_port;
+        hdr.int_filhos[0].Porta_Saida = standard_metadata.egress_spec;
+        hdr.int_filhos[0].Timestamp = standard_metadata.ingress_global_timestamp;
+        hdr.int_filhos[0].padding = 0;
 
-        hdr.int_filhos[index_filhos].setValid();
+        hdr.int_filhos[0].setValid();
 
         //Contabiliza filho
-        hdr.int_pai.Qtd_Filhos = index_filhos + 1;
+        hdr.int_pai.Qtd_Filhos = hdr.int_pai.Qtd_Filhos + 1;
     }
     
     table ipv4_lpm {
