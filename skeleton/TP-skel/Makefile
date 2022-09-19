@@ -3,3 +3,7 @@ NO_P4 = true
 P4C_ARGS = --p4runtime-file $(basename $@).p4info --p4runtime-format text
 
 include ../../utils/Makefile
+
+
+clean:
+	find . -name '*.pcap' -exec rm -rf {} +

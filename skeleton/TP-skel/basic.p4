@@ -3,9 +3,13 @@
 #include <v1model.p4>
 
 #define INT_TAM_FILHO 104 // Soma dos bits do int_filho (que deve ser múltiplo de 8)
+#define INT_TAM_PAI 64 // Soma dos bits do int_pai (que deve ser múltiplo de 8)
+
 #define MAX_FILHOS 80
 
 const bit<16> TYPE_IPV4 = 0x800;
+const bit<8> TYPE_TCP = 0x06;
+const bit<8> TYPE_INT_PAI = 0x12; // Based on basic_tunnel example. 
 
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
@@ -66,16 +70,19 @@ header tcp_t {
 }
 
 struct metadata {
+    bit<32> it_filhos; // iterador para os filhos. 
+                       // 32 bits porque meta.it_filhos = hdr.int_pai.Qtd_Filhos 
+                       // não funciona por tamanhos serem incompatíveis
 }
 
 struct headers {
-    ethernet_t              ethernet;
-    ipv4_t                  ipv4;
+    ethernet_t                      ethernet;
+    ipv4_t                          ipv4;
     // From load_balance example
-    tcp_t                   tcp;
+    tcp_t                           tcp;
     //Aditional data
-    int_pai_t               int_pai;
-    int_filho_t[MAX_FILHOS]  int_filhos;
+    int_pai_t                       int_pai;
+    int_filho_t[MAX_FILHOS]         int_filhos;
 }
 
 /*************************************************************************
@@ -101,7 +108,29 @@ parser MyParser(packet_in packet,
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
-        transition accept;
+        transition parse_int_pai;
+        //transition select(hdr.ipv4.protocol) {
+        //    TYPE_TCP: parse_tcp;
+        //    TYPE_INT_PAI: parse_int_pai;
+        //    default: accept;
+        //}
+    }
+
+    // Based on basic_tunnel and mri example.
+    state parse_int_pai {
+        packet.extract(hdr.int_pai);
+        meta.it_filhos = hdr.int_pai.Qtd_Filhos;
+        transition parse_int_filhos;
+    }
+
+    state parse_int_filhos {
+        // based on mri example
+        packet.extract(hdr.int_filhos.next);
+        meta.it_filhos = meta.it_filhos - 1;
+        transition select(meta.it_filhos) {
+            0 : parse_tcp;
+            default: parse_int_filhos;
+        }
     }
 
     state parse_tcp {
@@ -145,6 +174,7 @@ control MyIngress(inout headers hdr,
 
         hdr.int_pai.Tam_Filho = INT_TAM_FILHO;
         hdr.int_pai.Qtd_Filhos = 0;
+        hdr.ipv4.totalLen = hdr.ipv4.totalLen + INT_TAM_PAI;
         hdr.int_pai.setValid();
     }
 
@@ -160,10 +190,12 @@ control MyIngress(inout headers hdr,
         hdr.int_filhos[0].Porta_Saida = standard_metadata.egress_spec;
         hdr.int_filhos[0].Timestamp = standard_metadata.ingress_global_timestamp;
         hdr.int_filhos[0].padding = 0;
+        hdr.ipv4.totalLen = hdr.ipv4.totalLen + INT_TAM_FILHO;
+        // hdr.ipv4.protocol = TYPE_INT_PAI;
 
         hdr.int_filhos[0].setValid();
 
-        //Contabiliza filho
+        // Contabiliza filho
         hdr.int_pai.Qtd_Filhos = hdr.int_pai.Qtd_Filhos + 1;
     }
     
@@ -188,8 +220,10 @@ control MyIngress(inout headers hdr,
         if(!hdr.int_pai.isValid()){
             add_int_pai();
         }
-
-        add_int_filho();
+        
+        if(hdr.int_pai.isValid()){
+            add_int_filho();
+        }
     }
 }
 
@@ -235,6 +269,9 @@ control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
+        // Based on mri example
+        packet.emit(hdr.int_pai);
+        packet.emit(hdr.int_filhos);
         packet.emit(hdr.tcp);
     }
 }
