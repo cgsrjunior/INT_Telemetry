@@ -41,8 +41,17 @@
       ]
     },
     {
-      "name" : "tcp_t",
+      "name" : "int_pai_t",
       "id" : 3,
+      "fields" : [
+        ["tam_filho", 32, false],
+        ["qtd_filhos", 32, false],
+        ["next_proto", 8, false]
+      ]
+    },
+    {
+      "name" : "tcp_t",
+      "id" : 4,
       "fields" : [
         ["srcPort", 16, false],
         ["dstPort", 16, false],
@@ -58,21 +67,13 @@
       ]
     },
     {
-      "name" : "int_pai_t",
-      "id" : 4,
-      "fields" : [
-        ["Tam_Filho", 32, false],
-        ["Qtd_Filhos", 32, false]
-      ]
-    },
-    {
       "name" : "int_filho_t",
       "id" : 5,
       "fields" : [
-        ["ID_Switch", 32, false],
-        ["Porta_Entrada", 9, false],
-        ["Porta_Saida", 9, false],
-        ["Timestamp", 48, false],
+        ["id_switch", 32, false],
+        ["porta_entrada", 9, false],
+        ["porta_saida", 9, false],
+        ["timestamp", 48, false],
         ["padding", 6, false]
       ]
     },
@@ -134,16 +135,16 @@
       "pi_omit" : true
     },
     {
-      "name" : "tcp",
+      "name" : "int_pai",
       "id" : 4,
-      "header_type" : "tcp_t",
+      "header_type" : "int_pai_t",
       "metadata" : false,
       "pi_omit" : true
     },
     {
-      "name" : "int_pai",
+      "name" : "tcp",
       "id" : 5,
-      "header_type" : "int_pai_t",
+      "header_type" : "tcp_t",
       "metadata" : false,
       "pi_omit" : true
     },
@@ -782,7 +783,38 @@
                 }
               ],
               "op" : "extract"
+            }
+          ],
+          "transitions" : [
+            {
+              "type" : "hexstr",
+              "value" : "0x06",
+              "mask" : null,
+              "next_state" : "parse_tcp"
             },
+            {
+              "type" : "hexstr",
+              "value" : "0x12",
+              "mask" : null,
+              "next_state" : "parse_int_pai"
+            },
+            {
+              "value" : "default",
+              "mask" : null,
+              "next_state" : null
+            }
+          ],
+          "transition_key" : [
+            {
+              "type" : "field",
+              "value" : ["ipv4", "protocol"]
+            }
+          ]
+        },
+        {
+          "name" : "parse_int_pai",
+          "id" : 2,
+          "parser_ops" : [
             {
               "parameters" : [
                 {
@@ -800,7 +832,7 @@
                 },
                 {
                   "type" : "field",
-                  "value" : ["int_pai", "Qtd_Filhos"]
+                  "value" : ["int_pai", "qtd_filhos"]
                 }
               ],
               "op" : "set"
@@ -817,7 +849,7 @@
         },
         {
           "name" : "parse_int_filhos",
-          "id" : 2,
+          "id" : 3,
           "parser_ops" : [
             {
               "parameters" : [
@@ -887,7 +919,7 @@
         },
         {
           "name" : "parse_tcp",
-          "id" : 3,
+          "id" : 4,
           "parser_ops" : [
             {
               "parameters" : [
@@ -918,7 +950,7 @@
       "id" : 0,
       "source_info" : {
         "filename" : "basic.p4",
-        "line" : 268,
+        "line" : 266,
         "column" : 8,
         "source_fragment" : "MyDeparser"
       },
@@ -947,7 +979,7 @@
       "id" : 0,
       "source_info" : {
         "filename" : "basic.p4",
-        "line" : 246,
+        "line" : 244,
         "column" : 1,
         "source_fragment" : "update_checksum( ..."
       },
@@ -1146,22 +1178,18 @@
       "runtime_data" : [],
       "primitives" : [
         {
-          "op" : "assign",
+          "op" : "add_header",
           "parameters" : [
             {
-              "type" : "field",
-              "value" : ["int_pai", "Tam_Filho"]
-            },
-            {
-              "type" : "hexstr",
-              "value" : "0x00000068"
+              "type" : "header",
+              "value" : "int_pai"
             }
           ],
           "source_info" : {
             "filename" : "basic.p4",
-            "line" : 175,
+            "line" : 174,
             "column" : 8,
-            "source_fragment" : "hdr.int_pai.Tam_Filho = 104"
+            "source_fragment" : "hdr.int_pai.setValid()"
           }
         },
         {
@@ -1169,7 +1197,26 @@
           "parameters" : [
             {
               "type" : "field",
-              "value" : ["int_pai", "Qtd_Filhos"]
+              "value" : ["int_pai", "tam_filho"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x0000000d"
+            }
+          ],
+          "source_info" : {
+            "filename" : "basic.p4",
+            "line" : 175,
+            "column" : 8,
+            "source_fragment" : "hdr.int_pai.tam_filho = 13"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["int_pai", "qtd_filhos"]
             },
             {
               "type" : "hexstr",
@@ -1180,7 +1227,26 @@
             "filename" : "basic.p4",
             "line" : 176,
             "column" : 8,
-            "source_fragment" : "hdr.int_pai.Qtd_Filhos = 0"
+            "source_fragment" : "hdr.int_pai.qtd_filhos = 0"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["int_pai", "next_proto"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x06"
+            }
+          ],
+          "source_info" : {
+            "filename" : "basic.p4",
+            "line" : 11,
+            "column" : 24,
+            "source_fragment" : "0x06; ..."
           }
         },
         {
@@ -1206,7 +1272,7 @@
                       },
                       "right" : {
                         "type" : "hexstr",
-                        "value" : "0x0040"
+                        "value" : "0x0009"
                       }
                     }
                   },
@@ -1220,24 +1286,28 @@
           ],
           "source_info" : {
             "filename" : "basic.p4",
-            "line" : 177,
+            "line" : 178,
             "column" : 8,
-            "source_fragment" : "hdr.ipv4.totalLen = hdr.ipv4.totalLen + 64"
+            "source_fragment" : "hdr.ipv4.totalLen = hdr.ipv4.totalLen + 9"
           }
         },
         {
-          "op" : "add_header",
+          "op" : "assign",
           "parameters" : [
             {
-              "type" : "header",
-              "value" : "int_pai"
+              "type" : "field",
+              "value" : ["ipv4", "protocol"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x12"
             }
           ],
           "source_info" : {
             "filename" : "basic.p4",
-            "line" : 178,
-            "column" : 8,
-            "source_fragment" : "hdr.int_pai.setValid()"
+            "line" : 12,
+            "column" : 24,
+            "source_fragment" : "0x12; // Based on basic_tunnel example.  ..."
           }
         }
       ]
@@ -1265,123 +1335,9 @@
           ],
           "source_info" : {
             "filename" : "basic.p4",
-            "line" : 183,
+            "line" : 184,
             "column" : 8,
             "source_fragment" : "swid.read(var_swid, 0)"
-          }
-        },
-        {
-          "op" : "push",
-          "parameters" : [
-            {
-              "type" : "header_stack",
-              "value" : "int_filhos"
-            },
-            {
-              "type" : "hexstr",
-              "value" : "0x1"
-            }
-          ],
-          "source_info" : {
-            "filename" : "basic.p4",
-            "line" : 185,
-            "column" : 8,
-            "source_fragment" : "hdr.int_filhos.push_front(1)"
-          }
-        },
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["int_filhos[0]", "ID_Switch"]
-            },
-            {
-              "type" : "field",
-              "value" : ["scalars", "var_swid"]
-            }
-          ],
-          "source_info" : {
-            "filename" : "basic.p4",
-            "line" : 188,
-            "column" : 8,
-            "source_fragment" : "hdr.int_filhos[0].ID_Switch = var_swid"
-          }
-        },
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["int_filhos[0]", "Porta_Entrada"]
-            },
-            {
-              "type" : "field",
-              "value" : ["standard_metadata", "ingress_port"]
-            }
-          ],
-          "source_info" : {
-            "filename" : "basic.p4",
-            "line" : 189,
-            "column" : 8,
-            "source_fragment" : "hdr.int_filhos[0].Porta_Entrada = standard_metadata.ingress_port"
-          }
-        },
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["int_filhos[0]", "Porta_Saida"]
-            },
-            {
-              "type" : "field",
-              "value" : ["standard_metadata", "egress_spec"]
-            }
-          ],
-          "source_info" : {
-            "filename" : "basic.p4",
-            "line" : 190,
-            "column" : 8,
-            "source_fragment" : "hdr.int_filhos[0].Porta_Saida = standard_metadata.egress_spec"
-          }
-        },
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["int_filhos[0]", "Timestamp"]
-            },
-            {
-              "type" : "field",
-              "value" : ["standard_metadata", "ingress_global_timestamp"]
-            }
-          ],
-          "source_info" : {
-            "filename" : "basic.p4",
-            "line" : 191,
-            "column" : 8,
-            "source_fragment" : "hdr.int_filhos[0].Timestamp = standard_metadata.ingress_global_timestamp"
-          }
-        },
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["int_filhos[0]", "padding"]
-            },
-            {
-              "type" : "hexstr",
-              "value" : "0x00"
-            }
-          ],
-          "source_info" : {
-            "filename" : "basic.p4",
-            "line" : 192,
-            "column" : 8,
-            "source_fragment" : "hdr.int_filhos[0].padding = 0"
           }
         },
         {
@@ -1407,7 +1363,7 @@
                       },
                       "right" : {
                         "type" : "hexstr",
-                        "value" : "0x0068"
+                        "value" : "0x000d"
                       }
                     }
                   },
@@ -1421,24 +1377,9 @@
           ],
           "source_info" : {
             "filename" : "basic.p4",
-            "line" : 193,
+            "line" : 187,
             "column" : 8,
-            "source_fragment" : "hdr.ipv4.totalLen = hdr.ipv4.totalLen + 104"
-          }
-        },
-        {
-          "op" : "add_header",
-          "parameters" : [
-            {
-              "type" : "header",
-              "value" : "int_filhos[0]"
-            }
-          ],
-          "source_info" : {
-            "filename" : "basic.p4",
-            "line" : 196,
-            "column" : 8,
-            "source_fragment" : "hdr.int_filhos[0].setValid()"
+            "source_fragment" : "hdr.ipv4.totalLen = hdr.ipv4.totalLen + 13"
           }
         },
         {
@@ -1446,7 +1387,7 @@
           "parameters" : [
             {
               "type" : "field",
-              "value" : ["int_pai", "Qtd_Filhos"]
+              "value" : ["int_pai", "qtd_filhos"]
             },
             {
               "type" : "expression",
@@ -1460,7 +1401,7 @@
                       "op" : "+",
                       "left" : {
                         "type" : "field",
-                        "value" : ["int_pai", "Qtd_Filhos"]
+                        "value" : ["int_pai", "qtd_filhos"]
                       },
                       "right" : {
                         "type" : "hexstr",
@@ -1478,9 +1419,138 @@
           ],
           "source_info" : {
             "filename" : "basic.p4",
-            "line" : 199,
+            "line" : 188,
             "column" : 8,
-            "source_fragment" : "hdr.int_pai.Qtd_Filhos = hdr.int_pai.Qtd_Filhos + 1"
+            "source_fragment" : "hdr.int_pai.qtd_filhos = hdr.int_pai.qtd_filhos + 1"
+          }
+        },
+        {
+          "op" : "push",
+          "parameters" : [
+            {
+              "type" : "header_stack",
+              "value" : "int_filhos"
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x1"
+            }
+          ],
+          "source_info" : {
+            "filename" : "basic.p4",
+            "line" : 190,
+            "column" : 8,
+            "source_fragment" : "hdr.int_filhos.push_front(1)"
+          }
+        },
+        {
+          "op" : "add_header",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "int_filhos[0]"
+            }
+          ],
+          "source_info" : {
+            "filename" : "basic.p4",
+            "line" : 192,
+            "column" : 8,
+            "source_fragment" : "hdr.int_filhos[0].setValid()"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["int_filhos[0]", "id_switch"]
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "var_swid"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "basic.p4",
+            "line" : 193,
+            "column" : 8,
+            "source_fragment" : "hdr.int_filhos[0].id_switch = var_swid"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["int_filhos[0]", "porta_entrada"]
+            },
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "ingress_port"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "basic.p4",
+            "line" : 194,
+            "column" : 8,
+            "source_fragment" : "hdr.int_filhos[0].porta_entrada = standard_metadata.ingress_port"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["int_filhos[0]", "porta_saida"]
+            },
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "egress_spec"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "basic.p4",
+            "line" : 195,
+            "column" : 8,
+            "source_fragment" : "hdr.int_filhos[0].porta_saida = standard_metadata.egress_spec"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["int_filhos[0]", "timestamp"]
+            },
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "ingress_global_timestamp"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "basic.p4",
+            "line" : 196,
+            "column" : 8,
+            "source_fragment" : "hdr.int_filhos[0].timestamp = standard_metadata.ingress_global_timestamp"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["int_filhos[0]", "padding"]
+            },
+            {
+              "type" : "hexstr",
+              "value" : "0x00"
+            }
+          ],
+          "source_info" : {
+            "filename" : "basic.p4",
+            "line" : 197,
+            "column" : 8,
+            "source_fragment" : "hdr.int_filhos[0].padding = 0"
           }
         }
       ]
@@ -1503,7 +1573,7 @@
           "id" : 0,
           "source_info" : {
             "filename" : "basic.p4",
-            "line" : 202,
+            "line" : 200,
             "column" : 10,
             "source_fragment" : "ipv4_lpm"
           },
@@ -1590,7 +1660,7 @@
           "id" : 0,
           "source_info" : {
             "filename" : "basic.p4",
-            "line" : 216,
+            "line" : 214,
             "column" : 12,
             "source_fragment" : "hdr.ipv4.isValid()"
           },
@@ -1613,7 +1683,7 @@
           "id" : 1,
           "source_info" : {
             "filename" : "basic.p4",
-            "line" : 220,
+            "line" : 218,
             "column" : 11,
             "source_fragment" : "!hdr.int_pai.isValid()"
           },
@@ -1643,7 +1713,7 @@
           "id" : 2,
           "source_info" : {
             "filename" : "basic.p4",
-            "line" : 224,
+            "line" : 222,
             "column" : 11,
             "source_fragment" : "hdr.int_pai.isValid()"
           },
@@ -1668,7 +1738,7 @@
       "id" : 1,
       "source_info" : {
         "filename" : "basic.p4",
-        "line" : 234,
+        "line" : 232,
         "column" : 8,
         "source_fragment" : "MyEgress"
       },

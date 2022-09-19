@@ -2,14 +2,14 @@
 #include <core.p4>
 #include <v1model.p4>
 
-#define INT_TAM_FILHO 104 // Soma dos bits do int_filho (que deve ser múltiplo de 8)
-#define INT_TAM_PAI 64 // Soma dos bits do int_pai (que deve ser múltiplo de 8)
+#define INT_TAM_FILHO 13 // Soma dos bits do int_filho (que deve ser múltiplo de 8)
+#define INT_TAM_PAI 9 // Soma dos bits do int_pai (que deve ser múltiplo de 8)
 
 #define MAX_FILHOS 80
 
 const bit<16> TYPE_IPV4 = 0x800;
 const bit<8> TYPE_TCP = 0x06;
-const bit<8> TYPE_INT_PAI = 0x12; // Based on basic_tunnel example. 
+const bit<8> TYPE_INT = 0x12; // Based on basic_tunnel example. 
 
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
@@ -41,16 +41,17 @@ header ipv4_t {
 }
 
 header int_pai_t {
-    bit<32> Tam_Filho;
-    bit<32> Qtd_Filhos;
+    bit<32> tam_filho;
+    bit<32> qtd_filhos;
+    bit<8> next_proto;
 }
 
 header int_filho_t{
-    bit<32> ID_Switch;
-    bit<9> Porta_Entrada;
-    bit<9> Porta_Saida;
-    bit<48> Timestamp;
-// Outros dados
+    bit<32> id_switch;
+    bit<9> porta_entrada;
+    bit<9> porta_saida;
+    bit<48> timestamp;
+    // Outros dados
     bit<6> padding;
 }
 
@@ -71,18 +72,18 @@ header tcp_t {
 
 struct metadata {
     bit<32> it_filhos; // iterador para os filhos. 
-                       // 32 bits porque meta.it_filhos = hdr.int_pai.Qtd_Filhos 
+                       // 32 bits porque meta.it_filhos = hdr.int_pai.qtd_filhos 
                        // não funciona por tamanhos serem incompatíveis
 }
 
 struct headers {
     ethernet_t                      ethernet;
     ipv4_t                          ipv4;
-    // From load_balance example
-    tcp_t                           tcp;
     //Aditional data
     int_pai_t                       int_pai;
     int_filho_t[MAX_FILHOS]         int_filhos;
+    // From load_balance example
+    tcp_t                           tcp;
 }
 
 /*************************************************************************
@@ -108,18 +109,17 @@ parser MyParser(packet_in packet,
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
-        transition parse_int_pai;
-        //transition select(hdr.ipv4.protocol) {
-        //    TYPE_TCP: parse_tcp;
-        //    TYPE_INT_PAI: parse_int_pai;
-        //    default: accept;
-        //}
+        transition select(hdr.ipv4.protocol) {
+            TYPE_TCP: parse_tcp;
+            TYPE_INT: parse_int_pai;
+            default: accept;
+        }
     }
 
     // Based on basic_tunnel and mri example.
     state parse_int_pai {
         packet.extract(hdr.int_pai);
-        meta.it_filhos = hdr.int_pai.Qtd_Filhos;
+        meta.it_filhos = hdr.int_pai.qtd_filhos;
         transition parse_int_filhos;
     }
 
@@ -171,32 +171,30 @@ control MyIngress(inout headers hdr,
     }
 
     action add_int_pai(){
-
-        hdr.int_pai.Tam_Filho = INT_TAM_FILHO;
-        hdr.int_pai.Qtd_Filhos = 0;
-        hdr.ipv4.totalLen = hdr.ipv4.totalLen + INT_TAM_PAI;
         hdr.int_pai.setValid();
+        hdr.int_pai.tam_filho = INT_TAM_FILHO;
+        hdr.int_pai.qtd_filhos = 0;
+        hdr.int_pai.next_proto = TYPE_TCP;
+        hdr.ipv4.totalLen = hdr.ipv4.totalLen + INT_TAM_PAI;
+        hdr.ipv4.protocol = TYPE_INT;
     }
 
     action add_int_filho(){
         bit<32> var_swid;
         swid.read(var_swid, 0);
 
-        hdr.int_filhos.push_front(1);
-
-        // Adicionando dados do filhos
-        hdr.int_filhos[0].ID_Switch = var_swid;
-        hdr.int_filhos[0].Porta_Entrada = standard_metadata.ingress_port;
-        hdr.int_filhos[0].Porta_Saida = standard_metadata.egress_spec;
-        hdr.int_filhos[0].Timestamp = standard_metadata.ingress_global_timestamp;
-        hdr.int_filhos[0].padding = 0;
-        hdr.ipv4.totalLen = hdr.ipv4.totalLen + INT_TAM_FILHO;
-        // hdr.ipv4.protocol = TYPE_INT_PAI;
-
-        hdr.int_filhos[0].setValid();
-
         // Contabiliza filho
-        hdr.int_pai.Qtd_Filhos = hdr.int_pai.Qtd_Filhos + 1;
+        hdr.ipv4.totalLen = hdr.ipv4.totalLen + INT_TAM_FILHO;
+        hdr.int_pai.qtd_filhos = hdr.int_pai.qtd_filhos + 1;
+
+        hdr.int_filhos.push_front(1);
+        // Adicionando dados do filhos
+        hdr.int_filhos[0].setValid();
+        hdr.int_filhos[0].id_switch = var_swid;
+        hdr.int_filhos[0].porta_entrada = standard_metadata.ingress_port;
+        hdr.int_filhos[0].porta_saida = standard_metadata.egress_spec;
+        hdr.int_filhos[0].timestamp = standard_metadata.ingress_global_timestamp;
+        hdr.int_filhos[0].padding = 0;
     }
     
     table ipv4_lpm {
